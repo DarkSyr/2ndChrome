@@ -1,0 +1,62 @@
+<script>
+(function(){
+  // pickup token from path /access/<token> or ?token=
+  function getToken() {
+    const path = location.pathname.split('/');
+    const idx = path.indexOf('access');
+    if (idx !== -1 && path[idx+1]) return path[idx+1];
+    const u = new URL(location.href);
+    return u.searchParams.get('token');
+  }
+  const token = getToken();
+  if (!token) return;
+
+  // autosave every 30s
+  const intervalMs = 30000;
+  async function autosaveOnce() {
+    try {
+      // Example: capture some small state from page (you can modify to capture file content, profile data, etc.)
+      const sampleState = {
+        html: document.documentElement.outerHTML.slice(0, 200000) // cap to avoid huge posts
+      };
+
+      const body = {
+        token,
+        filename: 'page-snapshot.html',
+        contentBase64: btoa(unescape(encodeURIComponent(sampleState.html)))
+      };
+
+      await fetch('/api/save-profile', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(body)
+      });
+      console.log('autosave done');
+    } catch (err) {
+      console.warn('autosave failed', err);
+    }
+  }
+
+  const tId = setInterval(autosaveOnce, intervalMs);
+
+  // send on pagehide using sendBeacon
+  function onUnload() {
+    try {
+      const sampleState = {
+        html: document.documentElement.outerHTML.slice(0, 200000)
+      };
+      const payload = JSON.stringify({
+        token,
+        filename: 'page-snapshot-unload.html',
+        contentBase64: btoa(unescape(encodeURIComponent(sampleState.html)))
+      });
+      const blob = new Blob([payload], { type: 'application/json' });
+      navigator.sendBeacon('/api/save-profile', blob);
+    } catch (err) {
+      console.warn('unload save failed', err);
+    }
+  }
+  window.addEventListener('pagehide', onUnload);
+  window.addEventListener('beforeunload', onUnload);
+})();
+</script>

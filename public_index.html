@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Access - Isolated Browser</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: system-ui, Arial; padding: 32px; background:#111;color:#eee; }
+    .card { background:#141414;padding:20px;border-radius:8px;max-width:720px;margin:16px auto;box-shadow:0 6px 30px rgba(0,0,0,0.6)}
+    input[type=text]{width:100%;padding:10px;border-radius:6px;border:1px solid #222;background:#0e0e0e;color:#eee}
+    button{padding:10px 14px;border-radius:6px;border:none;background:#2b6cff;color:white;cursor:pointer}
+    .muted{color:#999;font-size:13px}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Open an access link</h2>
+    <p class="muted">Paste an access token or full url you received and click Open.</p>
+    <input id="token" placeholder="Paste access token or full link here" />
+    <div style="margin-top:10px">
+      <button id="open">Open</button>
+      <button id="admin" style="background:#444;margin-left:8px">Admin panel</button>
+    </div>
+    <div id="msg" style="margin-top:12px;color:#f88"></div>
+  </div>
+
+  <script>
+    function extractToken(s) {
+      if (!s) return null;
+      try {
+        // if it's a full url /access/<token>
+        const u = new URL(s);
+        const parts = u.pathname.split('/');
+        const idx = parts.indexOf('access');
+        if (idx !== -1 && parts[idx+1]) return parts[idx+1];
+      } catch {}
+      // if plain token
+      if (s.includes('.')) return s.trim();
+      return null;
+    }
+
+    document.getElementById('open').addEventListener('click', () => {
+      const raw = document.getElementById('token').value;
+      const token = extractToken(raw);
+      if (!token) {
+        document.getElementById('msg').textContent = 'Invalid token or URL.';
+        return;
+      }
+      // open access route
+      window.location = `/access/${encodeURIComponent(token)}`;
+    });
+
+    document.getElementById('admin').addEventListener('click', () => {
+      window.location = '/admin';
+    });
+  </script>
+</body>
+</html>
