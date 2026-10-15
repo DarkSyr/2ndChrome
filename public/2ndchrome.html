@@ -1,62 +1,98 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>2nd Chrome - Isolated</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>body{font-family:system-ui;background:#111;color:#eee;padding:20px} .muted{color:#999}</style>
+</head>
+<body>
+  <h2>2nd Chrome (isolated)</h2>
+  <p class="muted">This page was opened with an access token embedded in the URL path. The client will autosave snapshots every 30s if the token was created and saved by the admin with a user.</p>
+
+  <div id="status">Token: <span id="tk">-</span></div>
+  <div id="log"></div>
+
 <script>
 (function(){
-  // pickup token from path /access/<token> or ?token=
-  function getToken() {
+  function getTokenFromPath() {
     const path = location.pathname.split('/');
     const idx = path.indexOf('access');
     if (idx !== -1 && path[idx+1]) return path[idx+1];
-    const u = new URL(location.href);
-    return u.searchParams.get('token');
+    return null;
   }
-  const token = getToken();
-  if (!token) return;
+  const token = getTokenFromPath();
+  document.getElementById('tk').textContent = token ? token.slice(0, 12) + '...' : '(none)';
 
-  // autosave every 30s
-  const intervalMs = 30000;
+  if (!token) {
+    document.getElementById('log').textContent = 'No token found in URL path.';
+    return;
+  }
+
   async function autosaveOnce() {
     try {
-      // Example: capture some small state from page (you can modify to capture file content, profile data, etc.)
-      const sampleState = {
-        html: document.documentElement.outerHTML.slice(0, 200000) // cap to avoid huge posts
+      // Example snapshot: collect some lightweight state. Replace with actual profile upload if desired.
+      const snapshot = {
+        title: document.title,
+        url: location.href,
+        timestamp: new Date().toISOString()
       };
-
+      const html = JSON.stringify(snapshot, null, 2);
       const body = {
         token,
-        filename: 'page-snapshot.html',
-        contentBase64: btoa(unescape(encodeURIComponent(sampleState.html)))
+        filename: 'snapshot.json',
+        contentBase64: btoa(unescape(encodeURIComponent(html)))
       };
-
-      await fetch('/api/save-profile', {
+      const res = await fetch('/api/save-profile', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify(body)
       });
-      console.log('autosave done');
+      const data = await res.json();
+      if (data && data.success) {
+        const l = document.createElement('div');
+        l.textContent = 'Autosave ok: ' + new Date().toLocaleTimeString();
+        document.getElementById('log').appendChild(l);
+      } else {
+        const l = document.createElement('div');
+        l.textContent = 'Autosave rejected: ' + (data && data.error ? data.error : 'unknown');
+        document.getElementById('log').appendChild(l);
+      }
     } catch (err) {
-      console.warn('autosave failed', err);
+      const l = document.createElement('div');
+      l.textContent = 'Autosave error: ' + err.message;
+      document.getElementById('log').appendChild(l);
     }
   }
 
+  const intervalMs = 30000;
   const tId = setInterval(autosaveOnce, intervalMs);
+  // initial save shortly after load
+  setTimeout(autosaveOnce, 1000);
 
-  // send on pagehide using sendBeacon
+  // On pagehide/unload try to send a final snapshot with sendBeacon
   function onUnload() {
     try {
-      const sampleState = {
-        html: document.documentElement.outerHTML.slice(0, 200000)
+      const snapshot = {
+        title: document.title,
+        url: location.href,
+        timestamp: new Date().toISOString(),
+        final: true
       };
       const payload = JSON.stringify({
         token,
-        filename: 'page-snapshot-unload.html',
-        contentBase64: btoa(unescape(encodeURIComponent(sampleState.html)))
+        filename: 'snapshot-unload.json',
+        contentBase64: btoa(unescape(encodeURIComponent(JSON.stringify(snapshot))))
       });
       const blob = new Blob([payload], { type: 'application/json' });
       navigator.sendBeacon('/api/save-profile', blob);
     } catch (err) {
-      console.warn('unload save failed', err);
+      // ignore
     }
   }
   window.addEventListener('pagehide', onUnload);
   window.addEventListener('beforeunload', onUnload);
 })();
 </script>
+</body>
+</html>
